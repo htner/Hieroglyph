@@ -32,7 +32,7 @@ public:
 
   virtual void on_closed(brpc::StreamId id);
 
-  void SetStreamId(brpc::StreamId id);
+  bool SetStreamId(brpc::StreamId id);
 
   brpc::StreamId StreamId() {
     return stream_;

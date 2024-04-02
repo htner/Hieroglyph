@@ -76,7 +76,8 @@ cleanDemo(){
     mc rb --force demo-cluster/${bucket_name}
     mc mb --ignore-existing --region=us-east-1 demo-cluster/${bucket_name}
 
-    ( source ${GPHOME}/greenplum_path.sh;)
+    ## ( source ${GPHOME}/greenplum_path.sh;)
+    ( source /usr/local/sdb/greenplum_path.sh;)
 
     ##
     ## Remove the files and directories created; allow test harnesses

@@ -19,6 +19,7 @@ ExecuteTask::ExecuteTask(const sdb::PrepareTaskRequest* req,
 }
 
 ExecuteTask::~ExecuteTask() {
+		LOG(ERROR) << "task finish";
 }
 
 
@@ -35,8 +36,49 @@ void ExecuteTask::Run(CatalogInfo& catalog_info) {
 	Upload();
 	CommitTransactionCommand();
 
+	CloseStream();
+	MakeSureStreamClosed();
 	service_->FinishTask(GetKey());
 }
+
+void ExecuteTask::CloseStream() { 
+	for (size_t i = 0; i < recv_streams_.size(); ++i) {
+		auto& ss = recv_streams_[i];
+		for (size_t j = 0; j < ss.size(); ++j) {
+			ss[j]->Close();
+		}
+	}
+	for (size_t i = 0; i < send_streams_.size(); ++i) {
+		auto& ss = send_streams_[i];
+		ss->Close();
+	}
+}
+
+void ExecuteTask::MakeSureStreamClosed() { 
+	while (true) {
+		LOG(ERROR) << "make sure close stream";
+		for (size_t i = 0; i < recv_streams_.size(); ++i) {
+			auto& ss = recv_streams_[i];
+			for (size_t j = 0; j < ss.size(); ++j) {
+				if (ss[j]->StreamId() != brpc::INVALID_STREAM_ID) {
+					usleep(100000);
+					continue;
+				}
+			}
+		}
+		for (size_t i = 0; i < send_streams_.size(); ++i) {
+			auto& ss = send_streams_[i];
+			if (ss->StreamId() != brpc::INVALID_STREAM_ID) {
+					usleep(100000);
+					continue;
+			}
+		}
+		break;
+	}
+}
+
+
+
 
 const TaskIdentify& ExecuteTask::GetKey() {
 	return request_.task_identify();
@@ -462,7 +504,7 @@ bool ExecuteTask::StartSendStream(int32_t motion_id, int32_t route) {
 	auto workers = request_.workers();
 	auto it = workers.find(stream->GetToSeg());
 	if (it != workers.end()) {
-		return send_streams_[route]->Start(request_.task_identify(), it->second.addr());
+		return stream->Start(request_.task_identify(), it->second.addr());
 	}
 	return false;
 }
@@ -575,7 +617,8 @@ const std::string& ExecuteTask::RecvTupleChunkAny(int32_t motion_id, int32* targ
 		}
 		cond->wait(mlock);
 	}
-	return nullptr;
+	cache_.clear();
+	return cache_;
 }
 
 void ExecuteTask::BroadcastStopMessage(int32_t motion_id) {

@@ -2515,6 +2515,11 @@ heap_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 void
 simple_heap_insert(Relation relation, HeapTuple tup)
 {
+
+	if (likely(relation->rd_tableam == GetParquetamTableAmRoutine())) {
+		simple_parquet_insert(relation, tup);
+		return;
+	}
 	heap_insert(relation, tup, GetCurrentCommandId(true), 0, NULL,
 				GetCurrentTransactionId());
 }
@@ -2592,7 +2597,6 @@ heap_delete(Relation relation, ItemPointer tid,
 			CommandId cid, Snapshot crosscheck, bool wait,
 			TM_FailureData *tmfd, bool changingPart)
 {
-	return ParquetDelete(relation, tid, cid, crosscheck, wait,tmfd, changingPart);
 
 	TM_Result	result;
 	TransactionId xid = GetCurrentTransactionId();
@@ -3001,6 +3005,11 @@ simple_heap_delete(Relation relation, ItemPointer tid)
 {
 	TM_Result	result;
 	TM_FailureData tmfd;
+
+	if (likely(relation->rd_tableam == GetParquetamTableAmRoutine())) {
+		simple_parquet_delete(relation, tid);
+		return;
+	}
 
 	result = heap_delete(relation, tid,
 						 GetCurrentCommandId(true), InvalidSnapshot,
@@ -4120,6 +4129,11 @@ simple_heap_update(Relation relation, ItemPointer otid, HeapTuple tup)
 	TM_Result	result;
 	TM_FailureData tmfd;
 	LockTupleMode lockmode;
+
+	if (likely(relation->rd_tableam == GetParquetamTableAmRoutine())) {
+		simple_parquet_update(relation, otid, tup);
+		return;
+	}
 
 	result = heap_update_internal(relation, otid, tup,
 						 GetCurrentCommandId(true), InvalidSnapshot,

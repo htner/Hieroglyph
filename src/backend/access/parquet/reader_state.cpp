@@ -167,6 +167,7 @@ public:
         ParquetReader *r;
 		std::map<uint64_t, FileRowgroups>::iterator it = files.find(fileid);
 		if (it == files.end()) {
+			LOG(ERROR) << "file id not found " << fileid;
 			return false;
 		}
         r = CreateParquetReader(rel_, it->second.fileid_, it->second.filename.c_str(), tuple_desc, fetched_col_);
@@ -179,6 +180,8 @@ public:
             st = r->Open();
 		if (!st.ok()) {
 			delete r;
+			LOG(ERROR) << "parquet open failed " << 
+				st.message().c_str();
 			return false;
 		}
 

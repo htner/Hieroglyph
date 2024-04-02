@@ -62,15 +62,17 @@ void MotionStream::on_idle_timeout(brpc::StreamId id) {
 
 void MotionStream::on_closed(brpc::StreamId id) {
 	LOG(INFO) << "Stream=" << id << " is closed";
+	stream_ = brpc::INVALID_STREAM_ID;
 }
 
-void MotionStream::SetStreamId(brpc::StreamId id) {
+bool MotionStream::SetStreamId(brpc::StreamId id) {
 	if (stream_ != brpc::INVALID_STREAM_ID) {
 		LOG(ERROR) << "Fail to initialize stream id";
-		return;
+		return false;
 	}
 	LOG(INFO) << "set stream id " << id;
 	stream_ = id;
+	return true;
 }
 
 bool MotionStream::Start(const sdb::TaskIdentify& key, const std::string& server_addr)  {
@@ -99,7 +101,7 @@ bool MotionStream::Start(const sdb::TaskIdentify& key, const std::string& server
 	//cntl_ = std::make_unique<brpc::Controller>();
 	if (brpc::StreamCreate(&stream_, cntl_, NULL) != 0) {
 		LOG(ERROR) << "Fail to create stream";
-		brpc::StreamClose(stream_);
+		// brpc::StreamClose(stream_);
 		stream_ = brpc::INVALID_STREAM_ID;
 		return false;
 	}
@@ -150,8 +152,9 @@ void MotionStream::SendMessage(const char* msg, size_t len) {
 
 void MotionStream::Close() {
 	LOG(INFO) << "motion stream close";
-	brpc::StreamClose(stream_);
-	stream_ = brpc::INVALID_STREAM_ID;
+	if (stream_ != brpc::INVALID_STREAM_ID) {
+		brpc::StreamClose(stream_);
+	}
 }
 
 void MotionStream::PushCache() {
@@ -160,6 +163,5 @@ void MotionStream::PushCache() {
 	}
 	write_cache_.clear();
 }
-
 
 }

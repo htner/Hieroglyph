@@ -135,6 +135,7 @@ MemoryContext parquet_am_cxt = NULL;
 struct ParquetScanDescData {
   TableScanDescData rs_base;
   ParquetS3ReaderState *state;
+  //HeapTupleData tuple; 
 };
 
 typedef struct ParquetScanDescData *ParquetScanDesc;
@@ -470,7 +471,7 @@ extern "C" HeapTuple ParquetGetNext(TableScanDesc sscan, ScanDirection direction
   std::string error;
 
   TupleTableSlot* slot = MakeSingleTupleTableSlot(RelationGetDescr(pscan->rs_base.rs_rd),
-									&TTSOpsVirtual);
+									&TTSOpsHeapTuple);
   try {
 	while (true) {
 			bool ret = festate->next(slot);
@@ -543,7 +544,12 @@ extern "C" HeapTuple ParquetGetNext(TableScanDesc sscan, ScanDirection direction
 			valid = result;
 
 		if (valid) {
-				LOG(WARNING) << "heap key get ok" << valid;
+				ExecStoreVirtualTuple(slot);
+				tuple->t_tableOid = RelationGetRelid(pscan->rs_base.rs_rd);
+				ItemPointerCopy(&slot->tts_tid, &tuple->t_self);
+				LOG(WARNING) 
+					<< RelationGetRelid(pscan->rs_base.rs_rd) << ", "
+					<< "heap key get ok, " << ItemPointerToString(&tuple->t_self);
 				return tuple;
 			}
 	}
@@ -646,13 +652,14 @@ extern "C" bool ParquetGetNextSlot(TableScanDesc scan, ScanDirection direction,
 			valid = result;
 
 			if (valid) {
-				/*
-				LOG(WARNING) << "get next tuple, fileid "
+				ExecStoreVirtualTuple(slot);
+				//ItemPointerCopy(&slot->tts_tid, &tuple->t_self);
+				LOG(WARNING) << "get next tuple, relid "
+					<< RelationGetRelid(pscan->rs_base.rs_rd) << ", fileid "
 					<< ItemPointerGetBlockNumber(&(slot->tts_tid))
 					<< " index " << ItemPointerGetOffsetNumber(&(slot->tts_tid))
 					<< " tostring: " << ItemPointerToString(&(slot->tts_tid));
-				*/
-					return slot;
+				return true;
 			}
 		}
 	} catch (std::exception &e) {
@@ -669,7 +676,7 @@ extern "C" bool ParquetGetNextSlot(TableScanDesc scan, ScanDirection direction,
 	<< " index " << ItemPointerGetOffsetNumber(&(slot->tts_tid))
 	<< " tostring: " << ItemPointerToString(&(slot->tts_tid));
 
-	return true;
+	return false;
 }
 
 extern "C" void ParquetEndScan(TableScanDesc scan) {
@@ -774,6 +781,10 @@ extern "C" void ParquetUpdate(Relation rel, ItemPointer otid,
 		parquet_am_cxt = AllocSetContextCreate(NULL, "parquet_s3_fdw temporary data",
 								  ALLOCSET_DEFAULT_SIZES);
 	}
+
+    uint64_t block_id = ItemPointerGetBlockNumber(otid);
+    LOG(WARNING) << "simple tupleupdate: " << block_id << " " << otid->ip_posid;
+
 	auto old_cxt = MemoryContextSwitchTo(parquet_am_cxt);
 	std::string error;
 	TupleTableSlot *slot;
@@ -827,6 +838,14 @@ extern "C" void ParquetDelete(Relation rel, ItemPointer otid) {
 		parquet_am_cxt = AllocSetContextCreate(NULL, "parquet_s3_fdw temporary data",
 								  ALLOCSET_DEFAULT_SIZES);
 	}
+
+    uint64_t block_id = ItemPointerGetBlockNumber(otid);
+    LOG(WARNING) << "simple tupledelete: " << block_id << " " << otid->ip_posid;
+	/*
+	uint32_t* test = nullptr;
+	*test = 0;
+	*/
+
 	auto old_cxt = MemoryContextSwitchTo(parquet_am_cxt);
 	std::string error;
 	TupleDesc desc;
@@ -870,6 +889,7 @@ extern "C" void ParquetInsert(Relation rel, HeapTuple tuple, CommandId cid,
 		parquet_am_cxt = AllocSetContextCreate(NULL, "parquet_s3_fdw temporary data",
 								  ALLOCSET_DEFAULT_SIZES);
 	}
+
 	auto old_cxt = MemoryContextSwitchTo(parquet_am_cxt);
 	std::string error;
 	TupleTableSlot *slot;
@@ -936,10 +956,15 @@ extern "C" TM_Result ParquetTupleUpdate(Relation rel, ItemPointer otid,
                                         bool wait, TM_FailureData *tmfd,
                                         LockTupleMode *lockmode,
                                         bool *update_indexes) {
+
+  uint64_t block_id = ItemPointerGetBlockNumber(otid);
+  LOG(WARNING) << "tupleupdate: " << block_id << " " << otid->ip_posid;
+
   auto fmstate = GetModifyState(rel);
   if (fmstate == NULL) {
     return TM_Ok;
   }
+
   if (!fmstate->ExecDelete(otid)) {
 	return TM_Deleted;
   }
@@ -952,6 +977,9 @@ extern "C" TM_Result ParquetTupleDelete(Relation relation, ItemPointer tid,
                                         Snapshot crosscheck, bool wait,
                                         TM_FailureData *tmfd,
                                         bool changingPart) {
+  uint64_t block_id = ItemPointerGetBlockNumber(tid);
+  LOG(WARNING) << "tupledelete: " << block_id << " " << tid->ip_posid;
+
   auto fmstate = GetModifyState(relation);
   if (fmstate == NULL) {
     return TM_Ok;
@@ -1137,17 +1165,21 @@ bool ParquetIndexFetchTuple(struct IndexFetchTableData *scan,
 	ParquetS3ReaderState *festate = pscan->state;
 	// TupleTableSlot             *slot = pscan->ss_ScanTupleSlot;
 	std::string error;
-	//std::string *e = nullptr;
-	//error = *e;
 
 
-	LOG(ERROR) << "parquet index fetch tuple: " << ItemPointerToString(tid);
+	ExecClearTuple(slot);
 	try {
 		bool ret = festate->fetch(tid, slot, true);
 		if (!ret) {
-			LOG(ERROR) << "parquet index fetch slot return false";
+			std::string *e = nullptr;
+			error = *e;
+			LOG(ERROR) << "parquet index fetch slot return false, " << ItemPointerToString(&(slot->tts_tid));
 			return false;
 		}
+		slot->tts_tableOid = RelationGetRelid(pscan->xs_base.rel);
+		ExecStoreVirtualTuple(slot);
+		LOG(ERROR) << "rel " << RelationGetRelid(pscan->xs_base.rel) << ", "
+			"parquet index fetch tuple: " << ItemPointerToString(&(slot->tts_tid));
 	} catch (std::exception &e) {
 		error = e.what();
 	}
@@ -1172,14 +1204,14 @@ bool ParquetIndexFetchTuple(struct IndexFetchTableData *scan,
 extern "C"
 bool ParquetIndexFetchTupleVisible(struct IndexFetchTableData *scan,
                                           ItemPointer tid, Snapshot snapshot) {
-  LOG(ERROR) << "parallel SeqScan not implemented for Parquet tables";
+  // LOG(ERROR) << "parallel SeqScan not implemented for Parquet tables";
   return true;
 }
 
 extern "C"
 bool ParquetIndexUniqueCheck(Relation rel, ItemPointer tid,
                                     Snapshot snapshot, bool *all_dead) {
-  LOG(ERROR) << "parallel SeqScan not implemented for Parquet tables";
+  // LOG(ERROR) << "parallel SeqScan not implemented for Parquet tables";
   return true;
 }
 
@@ -1321,6 +1353,8 @@ double ParquetIndexBuildRangeScan(
 		 * instead of HeapTuple.  That allows the callback to be reused for
 		 * appendoptimized tables.
 		 */
+		LOG(WARNING) 
+					<< "call back , " << ItemPointerToString(&slot->tts_tid);
 		callback(indexRelation, &slot->tts_tid, values, isnull, tupleIsAlive,
 				 callback_state);
 

@@ -53,6 +53,7 @@ public:
     std::unique_lock<std::mutex> mlock(mutex_);
     auto it = tasks_.find(req->task_identify());
     if (it == tasks_.end()) {
+      mlock.unlock();     // unlock before notificiation to minimize mutex con
       return;
     }
     ExecuteTaskPtr ptr = it->second;
@@ -79,6 +80,7 @@ public:
       google::protobuf::TextFormat::PrintToString(req->to_task_identify(), &debugstr); //转换到字符串
       LOG(INFO) << "task not found:" << debugstr;
       cntl->SetFailed("Fail to accept stream, task not found");
+      mlock.unlock();     // unlock before notificiation to minimize mutex con
       return;
     }
     mlock.unlock();     // unlock before notificiation to minimize mutex con
@@ -104,7 +106,8 @@ public:
       return;
     }
     LOG(INFO) << "start recv stream:" << id << "|" << req->from_route();
-    it->second->StartRecvStream(req->motion_id(), req->from_route(), id);
+    if (!stream->SetStreamId(id)) {
+    }
     res->set_succ(true);
   }
 

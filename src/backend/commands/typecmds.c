@@ -771,6 +771,7 @@ RemoveTypeById(Oid typeOid)
 
 	relation = table_open(TypeRelationId, RowExclusiveLock);
 
+	elog(WARNING, "cache lookup for type %u", typeOid);
 	tup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeOid));
 	if (!HeapTupleIsValid(tup))
 		elog(ERROR, "cache lookup failed for type %u", typeOid);

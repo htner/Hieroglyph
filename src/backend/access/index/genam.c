@@ -474,6 +474,17 @@ systable_getnext(SysScanDesc sysscan)
 			bool		shouldFree;
 
 			htup = ExecFetchSlotHeapTuple(sysscan->slot, false, &shouldFree);
+
+			if (sysscan->slot->tts_ops == &TTSOpsVirtual)
+			{
+				htup->t_tableOid = sysscan->slot->tts_tableOid;
+				ItemPointerCopy(&sysscan->slot->tts_tid, &htup->t_self);	
+				ItemPointerCopy(&htup->t_self, &htup->t_data->t_ctid);	
+			}
+
+			elog(WARNING, "lossy index conditions are not implemented %s %s", ItemPointerToString(&htup->t_self),
+				ItemPointerToString(&htup->t_data->t_ctid));
+
 			Assert(!shouldFree);
 
 			/*
@@ -495,6 +506,17 @@ systable_getnext(SysScanDesc sysscan)
 			bool		shouldFree;
 
 			htup = ExecFetchSlotHeapTuple(sysscan->slot, false, &shouldFree);
+
+			if (htup && sysscan->slot->tts_ops == &TTSOpsVirtual)
+			{
+				htup->t_tableOid = sysscan->slot->tts_tableOid;
+				ItemPointerCopy(&sysscan->slot->tts_tid, &htup->t_self);	
+				ItemPointerCopy(&htup->t_self, &htup->t_data->t_ctid);	
+			}
+
+			elog(WARNING, "lossy index conditions are not implemented %s %s", ItemPointerToString(&htup->t_self),
+				ItemPointerToString(&htup->t_data->t_ctid));
+
 			Assert(!shouldFree);
 		}
 	}
@@ -656,6 +678,15 @@ systable_getnext_ordered(SysScanDesc sysscan, ScanDirection direction)
 	Assert(sysscan->irel);
 	if (index_getnext_slot(sysscan->iscan, direction, sysscan->slot))
 		htup = ExecFetchSlotHeapTuple(sysscan->slot, false, NULL);
+
+	if (htup && sysscan->slot->tts_ops == &TTSOpsVirtual)
+	{
+		htup->t_tableOid = sysscan->slot->tts_tableOid;
+		ItemPointerCopy(&sysscan->slot->tts_tid, &htup->t_self);	
+		ItemPointerCopy(&htup->t_self, &htup->t_data->t_ctid);	
+		elog(WARNING, "get next ordered %s %s", ItemPointerToString(&htup->t_self),
+			ItemPointerToString(&htup->t_data->t_ctid));
+	}
 
 	/* See notes in systable_getnext */
 	if (htup && sysscan->iscan->xs_recheck)

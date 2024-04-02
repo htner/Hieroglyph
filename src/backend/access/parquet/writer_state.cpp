@@ -283,7 +283,8 @@ bool ParquetS3WriterState::ExecInsert(TupleTableSlot *slot) {
 bool ParquetS3WriterState::ExecDelete(ItemPointer tid) {
   auto auto_switch = AutoSwitch(cxt);
   uint64_t block_id = ItemPointerGetBlockNumber(tid);
-  
+  LOG(WARNING) << "execdelete: " << block_id << " " << tid->ip_posid;
+
   auto it = updates_.find(block_id);
   if (it != updates_.end()) {
     return it->second->ExecDelete(tid->ip_posid);

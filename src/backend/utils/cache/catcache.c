@@ -1358,6 +1358,9 @@ SearchCatCacheInternal(CatCache *cache,
 			CACHE_elog(DEBUG2, "SearchCatCache(%s): found in bucket %d",
 					   cache->cc_relname, hashIndex);
 
+			elog(WARNING, "SearchCatCache(%s): found in bucket %d %s",
+					   cache->cc_relname, hashIndex, ItemPointerToString(&ct->tuple.t_self));
+
 #ifdef CATCACHE_STATS
 			cache->cc_hits++;
 #endif
@@ -1929,6 +1932,8 @@ CatalogCacheCreateEntry(CatCache *cache, HeapTuple ntp, Datum *arguments,
 
 		ct = (CatCTup *) palloc(sizeof(CatCTup) +
 								MAXIMUM_ALIGNOF + dtp->t_len);
+		elog(WARNING, "CatalogCacheCreateEntry %s",
+					   ItemPointerToString(&dtp->t_self));
 		ct->tuple.t_len = dtp->t_len;
 		ct->tuple.t_self = dtp->t_self;
 		ct->tuple.t_tableOid = dtp->t_tableOid;

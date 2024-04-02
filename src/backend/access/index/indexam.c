@@ -635,7 +635,7 @@ index_getnext_slot(IndexScanDesc scan, ScanDirection direction, TupleTableSlot *
 		Assert(ItemPointerIsValid(&scan->xs_heaptid));
 		// elog(WARNING, "index-getndex 3");
 		if (index_fetch_heap(scan, slot)) {
-			// elog(WARNING, "index-getndex 4 ok");
+			elog(WARNING, "index-getndex 4 ok");
 			return true;
 		}
 	}

@@ -230,10 +230,8 @@ class DefaultParquetReader : public ParquetReader {
 		status = reader_->RowGroup(rowgroup)->ReadTable(&table_);
 
 		if (!status.ok()) {
-			/*
-			throw Error("parquet reader: failed to read rowgroup #%i: %s", rowgroup,
-			   status.message().c_str());
-			*/
+			LOG(ERROR) << "parquet reader: failed to read rowgroup " <<  rowgroup << 
+				status.message().c_str();
 			return false;
 		}
 
@@ -260,7 +258,8 @@ class DefaultParquetReader : public ParquetReader {
 		}
 		ItemPointerSetBlockNumber(&((*result)->tts_tid), (uint64_t)fileid_);
 		ExecCopySlot(slot, *result);
-		ItemPointerCopy(&(slot->tts_tid), &((*result)->tts_tid));
+		// ItemPointerCopy(&(slot->tts_tid), &((*result)->tts_tid));
+		ItemPointerCopy(&((*result)->tts_tid), &(slot->tts_tid));
 	//	ItemPointerSetBlockNumber(&(slot->tts_tid), (uint32_t)fileid_);
 		return true;
    }

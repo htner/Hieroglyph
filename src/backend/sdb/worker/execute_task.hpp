@@ -107,6 +107,9 @@ public:
   void ReportResult(CmdType cmd_type, uint64_t process_rows, 
                     const std::string& result_dir, const std::string& result_file);
 
+  void CloseStream();
+  void MakeSureStreamClosed();
+
 private:
   sdb::PrepareTaskRequest request_;
   // FIXME_SDB using map?
